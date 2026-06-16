@@ -1,2 +1,4 @@
 {"ts":"2026-06-16T04:04:23Z","origem":"GRU","destino":"SCL","ida":"2026-10-12","volta":"2026-10-17","preco_centavos":191387,"moeda":"BRL","companhia":"LA","paradas":1,"fonte":"skyscanner"}
 {"ts":"2026-06-16T04:04:30Z","origem":"GRU","destino":"SCL","ida":"2026-10-13","volta":"2026-10-17","preco_centavos":173957,"moeda":"BRL","companhia":"LA","paradas":1,"fonte":"skyscanner"}
+{"ts":"2026-06-16T15:56:21Z","origem":"GRU","destino":"SCL","ida":"2026-10-12","volta":"2026-10-17","preco_centavos":193285,"moeda":"BRL","companhia":"LA","paradas":1,"fonte":"skyscanner"}
+{"ts":"2026-06-16T15:56:24Z","origem":"GRU","destino":"SCL","ida":"2026-10-13","volta":"2026-10-17","preco_centavos":179293,"moeda":"BRL","companhia":"LA","paradas":0,"fonte":"skyscanner"}
