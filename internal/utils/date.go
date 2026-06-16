@@ -23,3 +23,12 @@ func FormatDiaMes(isoDate string) string {
 func FormatVistoEm(t time.Time) string {
 	return t.Local().Format("02/01 15:04")
 }
+
+// FormatYYMMDD converte "2026-10-12" em "261012" (formato de URL do Skyscanner).
+func FormatYYMMDD(isoDate string) string {
+	t, err := time.Parse("2006-01-02", isoDate)
+	if err != nil {
+		return isoDate
+	}
+	return t.Format("060102")
+}
