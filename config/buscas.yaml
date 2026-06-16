@@ -1,0 +1,19 @@
+moeda: BRL
+adultos: 1
+amadeus_env: test          # test | prod
+
+# Filtros aplicados a toda busca (cada busca pode sobrescrever com `filtros:`)
+filtros_padrao:
+  max_paradas: 2           # 1, 2... ; 0 = sem limite (use somente_direto p/ só direto)
+  somente_direto: false
+  companhias_incluir: []   # ex.: [LA, G3] — vazio = todas (códigos IATA)
+  companhias_excluir: []   # ex.: [O6]
+  duracao_max_horas: 0     # 0 = sem limite (duração do trecho mais longo)
+
+buscas:
+  - origens: [GRU]                       # São Paulo / Guarulhos
+    destino: SCL                         # Santiago / Chile
+    datas_ida:   ["2026-10-12", "2026-10-13"]
+    datas_volta: ["2026-10-17"]
+    preco_alvo_reais: 2500
+    # filtros: {}                        # opcional: sobrescreve filtros_padrao só aqui

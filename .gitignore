@@ -1,0 +1,10 @@
+# Credenciais locais
+.env
+
+# Binários
+/radar
+/bin/
+
+# Go
+*.test
+*.out
