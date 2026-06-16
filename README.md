@@ -11,13 +11,17 @@ configurável em [`config/buscas.yaml`](config/buscas.yaml).
 ## Como funciona
 
 ```
-cron (6h/6h) → go run ./cmd/radar
-  → busca preços (Amadeus API)
+cron (1x/dia) → go run ./cmd/radar
+  → busca preços (Sky Scrapper / RapidAPI — dados do Skyscanner)
   → filtra (paradas, cias, duração — tudo via config)
   → registra em data/history.ndjson  (histórico versionado no git)
   → se preço bom: alerta no Telegram
   → git commit + push dos dados
 ```
+
+> Free tier do Sky Scrapper = **100 req/mês**. Por isso o cron roda **1x/dia**
+> (2 buscas ≈ 60/mês). Os IDs de aeroporto são cacheados em `data/airports.json`
+> pra não gastar cota com `searchAirport` em toda execução.
 
 ## Arquitetura (DDD enxuto)
 
@@ -27,7 +31,7 @@ internal/
   domain/flight      entidades + interfaces (OfferProvider, Repository, Notifier)
   usecases/collect   orquestra o ciclo de coleta + formata a mensagem
   usecases/alert     regra pura de "quando avisar" (testada)
-  adapters/amadeus   OfferProvider sobre a Amadeus API (OAuth2 + flight-offers)
+  adapters/skyscanner  OfferProvider sobre o Sky Scrapper/RapidAPI (searchAirport + searchFlights)
   adapters/telegram  Notifier (disparo via Bot API)
   infrastructure/store  histórico NDJSON + estado de alerta (anti-spam)
   config             carrega buscas.yaml + variáveis de ambiente
@@ -53,9 +57,9 @@ nem envia Telegram (útil pra validar a estrutura).
 
 ## Credenciais
 
-**Amadeus** — crie conta em https://developers.amadeus.com, gere uma app e pegue
-`API Key` (→ `AMADEUS_CLIENT_ID`) e `API Secret` (→ `AMADEUS_CLIENT_SECRET`).
-Comece no ambiente `test` (grátis); se os preços vierem defasados, troque `amadeus_env: prod`.
+**RapidAPI (Sky Scrapper)** — crie conta em https://rapidapi.com, inscreva-se na API
+[Sky Scrapper](https://rapidapi.com/apiheya/api/sky-scrapper) no plano **Basic (free)**
+e copie a sua `X-RapidAPI-Key` → `RAPIDAPI_KEY`. O free dá 100 requisições/mês.
 
 **Telegram** — fale com o [@BotFather](https://t.me/BotFather), `/newbot`, pegue o token
 (`TELEGRAM_BOT_TOKEN`). Para o `TELEGRAM_CHAT_ID`, mande uma mensagem ao seu bot e acesse
@@ -65,8 +69,8 @@ Comece no ambiente `test` (grátis); se os preços vierem defasados, troque `ama
 
 1. Suba o repo no GitHub (público).
 2. Em **Settings → Secrets and variables → Actions**, adicione:
-   `AMADEUS_CLIENT_ID`, `AMADEUS_CLIENT_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
-3. O workflow [`coletar.yml`](.github/workflows/coletar.yml) roda a cada 6h (ou manualmente
+   `RAPIDAPI_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+3. O workflow [`coletar.yml`](.github/workflows/coletar.yml) roda 1x/dia (ou manualmente
    em **Actions → coletar-precos → Run workflow**) e commita o histórico em `data/`.
 
 ## Configuração

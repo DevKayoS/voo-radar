@@ -14,16 +14,9 @@ import (
 
 // Config é a configuração já resolvida e pronta para uso.
 type Config struct {
-	Buscas   []flight.Busca // matriz expandida (origens × datas_ida × datas_volta)
-	Amadeus  AmadeusConfig
-	Telegram TelegramConfig
-}
-
-// AmadeusConfig agrupa credenciais e ambiente da API.
-type AmadeusConfig struct {
-	ClientID     string
-	ClientSecret string
-	Env          string // "test" | "prod"
+	Buscas      []flight.Busca // matriz expandida (origens × datas_ida × datas_volta)
+	RapidAPIKey string         // chave do RapidAPI (provider Sky Scrapper)
+	Telegram    TelegramConfig
 }
 
 // TelegramConfig agrupa o token do bot e o chat de destino.
@@ -37,7 +30,6 @@ type TelegramConfig struct {
 type yamlRoot struct {
 	Moeda         string      `yaml:"moeda"`
 	Adultos       int         `yaml:"adultos"`
-	AmadeusEnv    string      `yaml:"amadeus_env"`
 	FiltrosPadrao yamlFiltros `yaml:"filtros_padrao"`
 	Buscas        []yamlBusca `yaml:"buscas"`
 }
@@ -82,16 +74,9 @@ func Carregar(caminho string) (*Config, error) {
 		return nil, err
 	}
 
-	// Ambiente da Amadeus: env var sobrescreve o YAML; padrão "test".
-	amadeusEnv := orDefault(os.Getenv("AMADEUS_ENV"), orDefault(raiz.AmadeusEnv, "test"))
-
 	return &Config{
-		Buscas: buscas,
-		Amadeus: AmadeusConfig{
-			ClientID:     os.Getenv("AMADEUS_CLIENT_ID"),
-			ClientSecret: os.Getenv("AMADEUS_CLIENT_SECRET"),
-			Env:          amadeusEnv,
-		},
+		Buscas:      buscas,
+		RapidAPIKey: os.Getenv("RAPIDAPI_KEY"),
 		Telegram: TelegramConfig{
 			BotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 			ChatID:   os.Getenv("TELEGRAM_CHAT_ID"),

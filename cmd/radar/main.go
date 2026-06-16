@@ -1,5 +1,5 @@
 // Command radar executa uma rodada de coleta de preços de passagem:
-// lê a config, consulta a Amadeus, registra o histórico e alerta no Telegram.
+// lê a config, consulta o Sky Scrapper, registra o histórico e alerta no Telegram.
 // Pensado para rodar via cron do GitHub Actions.
 package main
 
@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/DevKayoS/voo-radar/internal/adapters/amadeus"
+	"github.com/DevKayoS/voo-radar/internal/adapters/skyscanner"
 	"github.com/DevKayoS/voo-radar/internal/adapters/telegram"
 	"github.com/DevKayoS/voo-radar/internal/config"
 	"github.com/DevKayoS/voo-radar/internal/infrastructure/store"
@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	caminhoConfig    = "config/buscas.yaml"
-	caminhoHistorico = "data/history.ndjson"
-	caminhoEstado    = "data/alert_state.json"
+	caminhoConfig     = "config/buscas.yaml"
+	caminhoHistorico  = "data/history.ndjson"
+	caminhoEstado     = "data/alert_state.json"
+	caminhoAeroportos = "data/airports.json"
 )
 
 func main() {
@@ -38,10 +39,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	slog.Info("radar: config carregada",
-		"buscas", len(cfg.Buscas), "amadeus_env", cfg.Amadeus.Env)
+	slog.Info("radar: config carregada", "buscas", len(cfg.Buscas))
 
-	provider := amadeus.NewClient(cfg.Amadeus.Env, cfg.Amadeus.ClientID, cfg.Amadeus.ClientSecret)
+	provider := skyscanner.NewClient(cfg.RapidAPIKey, caminhoAeroportos)
 	repo := store.NewNDJSONRepo(caminhoHistorico)
 	notifier := telegram.NewNotifier(cfg.Telegram.BotToken, cfg.Telegram.ChatID)
 
@@ -51,5 +51,13 @@ func run() error {
 	}
 
 	uc := collect.NewUseCase(provider, repo, notifier, estado)
-	return uc.Run(ctx, cfg.Buscas)
+	if err := uc.Run(ctx, cfg.Buscas); err != nil {
+		return err
+	}
+
+	// Persiste o cache de aeroportos (economiza cota nas próximas execuções).
+	if err := provider.SalvarCache(); err != nil {
+		slog.Warn("radar: falha ao salvar cache de aeroportos", "error", err)
+	}
+	return nil
 }

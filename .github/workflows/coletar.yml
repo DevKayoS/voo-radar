@@ -2,7 +2,9 @@ name: coletar-precos
 
 on:
   schedule:
-    - cron: "0 */6 * * *"   # a cada 6h (UTC; o GitHub pode atrasar — ok p/ monitorar preço)
+    # 1x/dia às 11:00 UTC (~08:00 BRT). Free tier do Sky Scrapper = 100 req/mês;
+    # 2 buscas/dia ≈ 60/mês, com folga. Aumentar a frequência pode estourar a cota.
+    - cron: "0 11 * * *"
   workflow_dispatch: {}      # permite rodar manualmente pelo painel do Actions
 
 permissions:
@@ -26,9 +28,7 @@ jobs:
       - name: Coletar preços
         run: go run ./cmd/radar
         env:
-          AMADEUS_CLIENT_ID: ${{ secrets.AMADEUS_CLIENT_ID }}
-          AMADEUS_CLIENT_SECRET: ${{ secrets.AMADEUS_CLIENT_SECRET }}
-          AMADEUS_ENV: test
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 

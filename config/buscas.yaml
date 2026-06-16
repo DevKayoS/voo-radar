@@ -1,6 +1,5 @@
 moeda: BRL
 adultos: 1
-amadeus_env: test          # test | prod
 
 # Filtros aplicados a toda busca (cada busca pode sobrescrever com `filtros:`)
 filtros_padrao:

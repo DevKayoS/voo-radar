@@ -37,37 +37,38 @@ Parâmetros reais da viagem (já viram a config padrão):
 
 ---
 
-## 2. Fonte de dados: Amadeus Self-Service API
+## 2. Fonte de dados: Sky Scrapper (RapidAPI)
 
-Decisão fechada: **API oficial da Amadeus**, não scraping.
-Motivo: o bot precisa rodar confiável por meses até outubro; scraper quebra quando o
-site muda e some com o histórico sem avisar. Volume é baixíssimo (cabe no free tier).
+Decisão fechada: **Sky Scrapper** (dados do Skyscanner via RapidAPI), não scraping próprio.
 
-### Endpoints usados
+> Histórico desta decisão: a 1ª escolha foi a **Amadeus Self-Service**, mas ela foi
+> descontinuada — o portal de novos cadastros foi pausado e desliga em **17/07/2026**.
+> Trocamos para o Sky Scrapper. Como a fonte fica atrás da interface `OfferProvider`,
+> a troca mexeu só no adapter; `domain`/`usecases`/`telegram`/`store`/testes ficaram intactos.
 
-1. **OAuth2 token** — `POST /v1/security/oauth2/token`
-   - `grant_type=client_credentials`, `client_id`, `client_secret`
-   - Retorna `access_token` válido por ~30 min. Cada execução pega um token novo.
+### Endpoints usados (host `sky-scrapper.p.rapidapi.com`)
 
-2. **Flight Offers Search** — `GET /v2/shopping/flight-offers`
-   - Params: `originLocationCode`, `destinationLocationCode`, `departureDate`,
-     `returnDate`, `adults`, `currencyCode=BRL`, `max=5`, `nonStop` (opcional)
-   - Retorna ofertas com preço total e itinerários.
+1. **searchAirport** — `GET /api/v1/flights/searchAirport?query=GRU`
+   - Resolve `skyId` + `entityId` de um aeroporto. **Cacheado em `data/airports.json`**
+     (commitado pelo Actions) → roda essencialmente uma vez só, não gasta cota por execução.
 
-### Ambientes
-- **Teste:** `test.api.amadeus.com` — free, porém preços podem vir de cache (não 100% ao vivo).
-- **Produção:** `api.amadeus.com` — também tem cota grátis, preços ao vivo.
+2. **searchFlights** — `GET /api/v1/flights/searchFlights`
+   - Params: `originSkyId`, `destinationSkyId`, `originEntityId`, `destinationEntityId`,
+     `date` (ida), `returnDate` (volta), `cabinClass`, `adults`, `currency`, `market`,
+     `countryCode`, `sortBy=cheapest`.
+   - Retorna `data.itineraries[]` com `price.raw`, e `legs[]` (`stopCount`, `durationInMinutes`,
+     `carriers.marketing[].alternateId`).
 
-Começamos no **teste** pra validar; se os preços vierem defasados, troca o `base_url`
-na config pra produção. (Decisão por env var `AMADEUS_ENV=test|prod`.)
+### Autenticação (GitHub Secrets)
+- Header `X-RapidAPI-Key: <RAPIDAPI_KEY>` + `X-RapidAPI-Host: sky-scrapper.p.rapidapi.com`.
 
-### Credenciais (GitHub Secrets)
-- `AMADEUS_CLIENT_ID`
-- `AMADEUS_CLIENT_SECRET`
+### Cota — restrição que define a frequência
+Free tier (**Basic**) = **100 requisições/mês**, hard limit. Com 2 combinações de data,
+cada execução custa 2 chamadas `searchFlights` → o cron roda **1x/dia** (~60/mês, ver §3).
 
-> ⚠️ Risco conhecido: se o free tier da Amadeus não for suficiente ou os preços de teste
-> forem ruins demais, o plano B é plugar uma segunda fonte (Kiwi/Tequila) ou SerpAPI.
-> O `adapters/` é desenhado pra isso ser uma troca isolada (ver §6, interface `OfferProvider`).
+> ⚠️ Risco conhecido: cota baixa e API não-oficial (pode mudar contrato/instabilidade).
+> Plano B continua sendo trocar o adapter (Travelpayouts, SerpAPI). A interface
+> `OfferProvider` (§6) mantém isso isolado.
 
 ---
 
@@ -76,20 +77,20 @@ na config pra produção. (Decisão por env var `AMADEUS_ENV=test|prod`.)
 Sem VPS. O fluxo:
 
 ```
-   cron (a cada 6h)
+   cron (1x/dia)
         │
         ▼
   go run ./cmd/radar
         │
    ┌────┴────────────────────────┐
    ▼                             ▼
- busca preços (Amadeus)    avalia regra de alerta
+ busca preços (Sky Scrapper) avalia regra de alerta
    │                             │
    ▼                             ▼
  append em data/history.ndjson   se "bom" → Telegram
    │
    ▼
- git commit + push (histórico versionado no próprio repo)
+ git commit + push (histórico + cache de aeroportos versionados)
 ```
 
 Esse é o padrão **"git scraping"**: a cada execução o job acrescenta uma linha no arquivo
@@ -106,7 +107,7 @@ ao vivo, migra pra **Turso/libSQL** (free tier) — mas não agora.
 name: coletar-precos
 on:
   schedule:
-    - cron: "0 */6 * * *"   # a cada 6h (horário UTC, GH atrasa às vezes — ok)
+    - cron: "0 11 * * *"   # 1x/dia ~08:00 BRT (cota: 100 req/mês no free)
   workflow_dispatch: {}       # botão de rodar manual
 permissions:
   contents: write             # pra dar push do histórico
@@ -119,9 +120,7 @@ jobs:
         with: { go-version: "1.26" }
       - run: go run ./cmd/radar
         env:
-          AMADEUS_CLIENT_ID: ${{ secrets.AMADEUS_CLIENT_ID }}
-          AMADEUS_CLIENT_SECRET: ${{ secrets.AMADEUS_CLIENT_SECRET }}
-          AMADEUS_ENV: test
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       - name: commit histórico
@@ -174,7 +173,7 @@ Visto em: 15/06 14:32
 
 ### `data/history.ndjson` (append-only, 1 linha por coleta de combinação)
 ```json
-{"ts":"2026-06-15T14:32:00Z","origem":"GRU","destino":"SCL","ida":"2026-10-12","volta":"2026-10-17","preco_centavos":218000,"moeda":"BRL","companhia":"LATAM","paradas":1,"fonte":"amadeus-test"}
+{"ts":"2026-06-15T14:32:00Z","origem":"GRU","destino":"SCL","ida":"2026-10-12","volta":"2026-10-17","preco_centavos":218000,"moeda":"BRL","companhia":"LA","paradas":1,"fonte":"skyscanner"}
 ```
 
 ### `data/alert_state.json` (estado pra anti-spam)
@@ -207,9 +206,10 @@ voo-radar/
 │   │   └── alert/
 │   │       └── alert_rule.go       # regras §4 (abaixo do alvo, mínima histórica, queda %)
 │   ├── adapters/
-│   │   ├── amadeus/
-│   │   │   ├── client.go           # OfferProvider: OAuth2 + flight-offers; mapeia p/ domain
-│   │   │   └── models.go           # structs do JSON da Amadeus
+│   │   ├── skyscanner/
+│   │   │   ├── client.go           # OfferProvider: searchAirport + searchFlights; mapeia p/ domain
+│   │   │   ├── airports.go         # cache em disco dos IDs de aeroporto (economiza cota)
+│   │   │   └── models.go           # structs do JSON do Sky Scrapper
 │   │   └── telegram/
 │   │       ├── responder.go        # Notifier: sendMessage (igual fintech-kodify)
 │   │       └── models.go           # TelegramSendMessage
@@ -226,7 +226,8 @@ voo-radar/
 │   └── buscas.yaml                 # config das rotas/datas/alvos (versionado)
 ├── data/                           # gerado/commitado pela Action
 │   ├── history.ndjson
-│   └── alert_state.json
+│   ├── alert_state.json
+│   └── airports.json               # cache de IDs de aeroporto (Sky Scrapper)
 ├── .github/workflows/coletar.yml
 ├── .env.example
 ├── go.mod
@@ -237,7 +238,7 @@ voo-radar/
 
 ### Contratos de domínio (interfaces — o que permite trocar a fonte)
 ```go
-// OfferProvider: implementado por adapters/amadeus (e futuros: kiwi, serpapi)
+// OfferProvider: implementado por adapters/skyscanner (e futuros: travelpayouts, serpapi)
 type OfferProvider interface {
     Buscar(ctx context.Context, b Busca) ([]Offer, error)
 }
@@ -265,11 +266,10 @@ type Notifier interface {
 ```yaml
 moeda: BRL
 adultos: 1
-amadeus_env: test          # test | prod
 
 # Defaults aplicados a toda busca (cada busca pode sobrescrever)
 filtros_padrao:
-  max_paradas: 2           # 0 = só direto; 1, 2...
+  max_paradas: 2           # 1, 2... ; 0 = sem limite (use somente_direto p/ só direto)
   somente_direto: false
   companhias_incluir: []   # ex.: [LA, G3] — vazio = todas (códigos IATA da cia)
   companhias_excluir: []   # ex.: [O6]
@@ -288,25 +288,23 @@ buscas:
 
 | Filtro | O que faz | Onde aplica |
 |---|---|---|
-| `max_paradas` | descarta ofertas com mais que N conexões | pós-busca (Amadeus retorna `numberOfStops`) |
-| `somente_direto` | atalho pra `max_paradas: 0` → vira param `nonStop=true` na API | na query |
-| `companhias_incluir` | só considera essas cias (IATA) | na query (`includedAirlineCodes`) |
-| `companhias_excluir` | remove essas cias | na query (`excludedAirlineCodes`) |
+| `max_paradas` | descarta ofertas com mais que N paradas | pós-busca (`legs[].stopCount`) |
+| `somente_direto` | só voos diretos (paradas = 0) | pós-busca |
+| `companhias_incluir` | só considera essas cias (IATA) | pós-busca |
+| `companhias_excluir` | remove essas cias | pós-busca |
 | `duracao_max_horas` | descarta itinerários muito longos | pós-busca |
 | `preco_alvo_reais` | limiar do alerta "abaixo do alvo" (§4) | regra de alerta |
 
-> Decisão de design: filtros que a Amadeus aceita como parâmetro (cias, nonStop) vão
-> direto na query (economiza cota); o resto (`max_paradas>0`, duração) é filtrado em Go
-> sobre o resultado. Tudo lido do YAML — trocar filtro nunca exige recompilar lógica.
+> Decisão de design: com o Sky Scrapper, **todos** os filtros são aplicados em Go sobre o
+> resultado (`flight.Filtros.Aceita`), pois a API não expõe os parâmetros equivalentes de
+> forma confiável. Tudo lido do YAML — trocar filtro nunca exige recompilar a lógica.
 
 O carregador expande cada busca na matriz `origens × datas_ida × datas_volta`.
 Config atual = 1 × 2 × 1 = **2 consultas** por execução.
 
 ### Variáveis de ambiente (`.env.example`)
 ```
-AMADEUS_CLIENT_ID=
-AMADEUS_CLIENT_SECRET=
-AMADEUS_ENV=test
+RAPIDAPI_KEY=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 ```
@@ -316,7 +314,7 @@ TELEGRAM_CHAT_ID=
 ## 8. Dependências
 
 Mínimo possível, perto da stdlib (estilo do `fintech-kodify`):
-- `net/http`, `encoding/json`, `log/slog` — stdlib (Amadeus + Telegram)
+- `net/http`, `encoding/json`, `log/slog` — stdlib (Sky Scrapper + Telegram)
 - `gopkg.in/yaml.v3` — ler `buscas.yaml`
 - Sem ORM, sem banco, sem framework web.
 
@@ -324,12 +322,12 @@ Mínimo possível, perto da stdlib (estilo do `fintech-kodify`):
 
 ## 9. Plano de implementação (fases)
 
-**Fase 1 — Coletor + Telegram (MVP, é o que destrava tudo)**
+**Fase 1 — Coletor + Telegram (MVP, é o que destrava tudo)** ✅ implementada
 1. `config` (carregar yaml + env) e `domain/flight` (entities + interfaces)
 2. `utils/money` e `utils/date`
-3. `adapters/amadeus` (OAuth2 + flight-offers → `[]Offer`)
+3. `adapters/skyscanner` (searchAirport + searchFlights → `[]Offer`, com cache de aeroportos)
 4. `infrastructure/store` (append/ler NDJSON + alert_state)
-5. `usecases/alert` (regra: abaixo do alvo + mínima histórica)
+5. `usecases/alert` (regra: abaixo do alvo + mínima histórica) — testado
 6. `adapters/telegram` (sendMessage)
 7. `usecases/collect` (orquestra tudo) + `cmd/radar/main.go`
 8. `.github/workflows/coletar.yml`
@@ -351,10 +349,12 @@ Mínimo possível, perto da stdlib (estilo do `fintech-kodify`):
 - ✅ **Origem:** só `GRU` (VCP e CGH descartados).
 - ✅ **Visibilidade:** repo **público**. Histórico de preços fica aberto (ok pro dono).
 - ✅ **Filtros:** configuráveis via `buscas.yaml`, nada hardcoded (ver §7).
-- ✅ **Frequência:** cron 6h/6h (4×/dia) — suficiente, evita ruído.
+- ✅ **Fonte:** Sky Scrapper / RapidAPI (Amadeus foi descontinuada — ver §2).
+- ✅ **Frequência:** cron **1x/dia** — limitado pela cota free de 100 req/mês (§2).
+  Alternativa: 3×/dia se reduzir para 1 data de ida (3 × 1 × 30 = 90/mês).
 
 **Pendentes (só pra hora de ligar a Fase 1):**
+- ⏳ **Chave RapidAPI:** criar conta, assinar o Sky Scrapper (Basic/free) e pegar a `RAPIDAPI_KEY`.
 - ⏳ **Bot do Telegram:** criar via @BotFather → pegar `TELEGRAM_BOT_TOKEN` e o seu
-  `TELEGRAM_CHAT_ID`. Posso te guiar no passo a passo quando o código estiver pronto.
-- ⏳ **Credenciais Amadeus:** criar conta dev e pegar `CLIENT_ID`/`CLIENT_SECRET`.
+  `TELEGRAM_CHAT_ID`.
 ```

@@ -17,7 +17,7 @@ type Offer struct {
 	Companhia     string  // código IATA da cia validadora (ex.: "LA")
 	Paradas       int     // maior número de paradas entre os trechos (ida/volta)
 	DuracaoHoras  float64 // maior duração entre os trechos, em horas
-	Fonte         string  // ex.: "amadeus-test"
+	Fonte         string  // ex.: "skyscanner"
 }
 
 // Busca é uma combinação concreta de rota + datas a consultar num provider.
@@ -115,7 +115,7 @@ func RegistroDe(o Offer, ts time.Time) RegistroPreco {
 	}
 }
 
-// OfferProvider busca ofertas para uma Busca. Implementado por adapters/amadeus.
+// OfferProvider busca ofertas para uma Busca. Implementado por adapters/skyscanner.
 type OfferProvider interface {
 	Buscar(ctx context.Context, b Busca) ([]Offer, error)
 }
