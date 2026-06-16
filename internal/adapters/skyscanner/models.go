@@ -1,5 +1,7 @@
 package skyscanner
 
+import "encoding/json"
+
 // ---- searchAirport ----
 
 type airportResponse struct {
@@ -37,8 +39,9 @@ func (e airportEntry) ids() (skyID, entityID string) {
 // ---- searchFlights ----
 
 type flightsResponse struct {
-	Status bool        `json:"status"`
-	Data   flightsData `json:"data"`
+	Status  bool            `json:"status"`
+	Data    flightsData     `json:"data"`
+	Message json.RawMessage `json:"message"` // string ou lista de erros quando status=false
 }
 
 type flightsData struct {

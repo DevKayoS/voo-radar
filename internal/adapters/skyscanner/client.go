@@ -64,7 +64,7 @@ func (c *Client) Buscar(ctx context.Context, b flight.Busca) ([]flight.Offer, er
 	q.Set("returnDate", b.Volta)
 	q.Set("cabinClass", "economy")
 	q.Set("adults", strconv.Itoa(b.Adultos))
-	q.Set("sortBy", "cheapest")
+	q.Set("sortBy", "price_low")
 	q.Set("currency", b.Moeda)
 	q.Set("market", c.market)
 	q.Set("countryCode", c.pais)
@@ -74,7 +74,7 @@ func (c *Client) Buscar(ctx context.Context, b flight.Busca) ([]flight.Offer, er
 		return nil, err
 	}
 	if !resp.Status {
-		return nil, fmt.Errorf("skyscanner: busca sem sucesso para %s→%s", b.Origem, b.Destino)
+		return nil, fmt.Errorf("skyscanner: busca sem sucesso para %s→%s: %s", b.Origem, b.Destino, resp.Message)
 	}
 
 	return mapearOfertas(b, resp.Data.Itineraries), nil
