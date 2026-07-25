@@ -19,3 +19,4 @@
 {"ts":"2026-07-23T12:24:28Z","origem":"GRU","destino":"SCL","ida":"2026-10-13","volta":"2026-10-17","preco_centavos":108100,"moeda":"BRL","companhia":"H2","paradas":0,"fonte":"skyscanner"}
 {"ts":"2026-07-24T12:19:37Z","origem":"GRU","destino":"SCL","ida":"2026-10-12","volta":"2026-10-17","preco_centavos":130700,"moeda":"BRL","companhia":"H2","paradas":0,"fonte":"skyscanner"}
 {"ts":"2026-07-24T12:19:43Z","origem":"GRU","destino":"SCL","ida":"2026-10-13","volta":"2026-10-17","preco_centavos":106700,"moeda":"BRL","companhia":"H2","paradas":0,"fonte":"skyscanner"}
+{"ts":"2026-07-25T12:03:07Z","origem":"GRU","destino":"SCL","ida":"2026-10-12","volta":"2026-10-17","preco_centavos":138506,"moeda":"BRL","companhia":"H2","paradas":0,"fonte":"skyscanner"}
